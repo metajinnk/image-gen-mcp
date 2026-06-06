@@ -9,24 +9,39 @@ jobs:
   deploy:
     name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
-    # Skip if the Cloudflare token secret isn't configured (e.g. on forks)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'metajinnk' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check for Cloudflare credentials
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN not set — skipping deploy."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Setup Node
+      - if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.check.outputs.configured == 'true'
+        name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      - if: steps.check.outputs.configured == 'true'
+        name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
+      - if: steps.check.outputs.configured == 'true'
+        name: Typecheck
         run: npm run typecheck
 
-      - name: Deploy with Wrangler
+      - if: steps.check.outputs.configured == 'true'
+        name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
