@@ -1,0 +1,8 @@
+# Local development secrets for `wrangler dev`.
+# Copy to `.dev.vars` (git-ignored) and fill in the keys you need.
+# At least one image API key is required.
+
+GOOGLE_API_KEY_WORK=   # Imagen 4 Ultra  (engine: google-work)
+GOOGLE_API_KEY=        # Imagen 4 std    (engine: google)
+OPENAI_API_KEY=        # DALL-E 3        (engine: openai)
+AUTH_TOKEN=            # optional Bearer token for auth
