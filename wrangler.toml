@@ -1,0 +1,17 @@
+name = "image-gen-mcp"
+main = "index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "claude-images"
+
+[vars]
+PUBLIC_URL = "https://image-gen-mcp.image-gen-metajinnk.workers.dev"
+
+# Secrets (set via `wrangler secret put`):
+# AUTH_TOKEN
+# GOOGLE_API_KEY_WORK
+# GOOGLE_API_KEY
+# OPENAI_API_KEY
