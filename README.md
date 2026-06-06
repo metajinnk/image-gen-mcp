@@ -2,6 +2,7 @@
 
 > A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server, running on **Cloudflare Workers**, that lets AI assistants (Claude, etc.) generate images and store them permanently in the cloud.
 
+[![CI](https://github.com/metajinnk/image-gen-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/metajinnk/image-gen-mcp/actions/workflows/ci.yml)
 ![MCP](https://img.shields.io/badge/MCP-2024--11--05-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
