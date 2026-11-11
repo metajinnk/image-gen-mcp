@@ -1,7 +1,8 @@
 /**
  * image-gen-mcp
  * Cloudflare Worker — MCP server for AI image generation
- * Supports: Google Imagen 4 (via Gemini API), DALL-E 3 (OpenAI)
+ * Supports: Google Gemini image models (Nano Banana, via Gemini API), DALL-E 3 (OpenAI)
+ * Imagen 4 was shut down on the Gemini API on 2026-08-17.
  * Storage: Cloudflare R2
  */
 
@@ -11,8 +12,11 @@ export interface Env {
   AUTH_TOKEN?: string;
   GOOGLE_API_KEY_WORK?: string;
   GOOGLE_API_KEY?: string;
+  GOOGLE_IMAGE_MODEL?: string;
   OPENAI_API_KEY?: string;
 }
+
+const DEFAULT_GOOGLE_IMAGE_MODEL = "gemini-3.1-flash-image";
 
 // ─── Tool definitions (MCP protocol) ───────────────────────────────────────
 
@@ -23,7 +27,7 @@ const TOOLS = [
       "Generate an image with AI and store it permanently in cloud (R2).",
       "Returns: (1) a permanent URL the user can download/embed anywhere,",
       "         (2) a 200px JPEG thumbnail as an image block so Claude can see the result.",
-      "Engines: openai = DALL-E 3, google = Imagen 4, auto = keyword-based selection.",
+      "Engines: google-work / google = Gemini image model (Nano Banana), openai = DALL-E 3.",
       "After generation Claude should describe what it sees and ask if changes are needed.",
     ].join(" "),
     inputSchema: {
@@ -140,25 +144,37 @@ async function generateGoogle(
   prompt: string,
   aspectRatio: string,
   apiKey: string,
-  model = "imagen-4.0-generate-001"
-): Promise<ArrayBuffer> {
+  model: string
+): Promise<{ buffer: ArrayBuffer; contentType: string }> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        instances: [{ prompt }],
-        parameters: { sampleCount: 1, aspectRatio },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          imageConfig: { aspectRatio },
+        },
       }),
     }
   );
   if (!res.ok) {
-    const err: any = await res.json();
-    throw new Error(`Google Imagen: ${err.error?.message || res.statusText}`);
+    const err: any = await res.json().catch(() => ({}));
+    throw new Error(`Google ${model}: ${err.error?.message || res.statusText}`);
   }
   const data: any = await res.json();
-  return base64ToBuffer(data.predictions[0].bytesBase64Encoded);
+  const parts: any[] = data.candidates?.[0]?.content?.parts || [];
+  const image = parts.find((p) => p.inlineData?.data);
+  if (!image) {
+    const reason = data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason;
+    throw new Error(`Google ${model}: no image in response${reason ? ` (${reason})` : ""}`);
+  }
+  return {
+    buffer: base64ToBuffer(image.inlineData.data),
+    contentType: image.inlineData.mimeType || "image/png",
+  };
 }
 
 function base64ToBuffer(b64: string): ArrayBuffer {
@@ -186,30 +202,32 @@ async function toolCreateVisual(args: any, env: Env) {
   const filename = `${fileBase}.png`;
 
   let imageBuffer: ArrayBuffer;
+  let contentType = "image/png";
+  const googleModel = env.GOOGLE_IMAGE_MODEL || DEFAULT_GOOGLE_IMAGE_MODEL;
 
   if (engine === "google-work") {
     if (!env.GOOGLE_API_KEY_WORK) throw new Error("GOOGLE_API_KEY_WORK not configured");
-    imageBuffer = await generateGoogle(
+    ({ buffer: imageBuffer, contentType } = await generateGoogle(
       prompt,
       aspectRatio,
       env.GOOGLE_API_KEY_WORK,
-      "imagen-4.0-ultra-001"
-    );
+      googleModel
+    ));
   } else if (engine === "google") {
     if (!env.GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY not configured");
-    imageBuffer = await generateGoogle(
+    ({ buffer: imageBuffer, contentType } = await generateGoogle(
       prompt,
       aspectRatio,
       env.GOOGLE_API_KEY,
-      "imagen-4.0-generate-001"
-    );
+      googleModel
+    ));
   } else {
     if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
     imageBuffer = await generateOpenAI(prompt, aspectRatio, style, env.OPENAI_API_KEY);
   }
 
   await env.IMAGES.put(filename, imageBuffer, {
-    httpMetadata: { contentType: "image/png" },
+    httpMetadata: { contentType },
     customMetadata: {
       prompt: prompt.slice(0, 500),
       engine,
