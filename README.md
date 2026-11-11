@@ -8,13 +8,13 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-When an AI client connects, it gains three tools: generate an image (Google Imagen 4 or DALL-E 3), list everything it has generated, and get a ready-to-paste embed snippet. Generated images are written to **Cloudflare R2** and served from a permanent, CDN-cached public URL — so they can be embedded in chats, documents, or web pages and never expire.
+When an AI client connects, it gains three tools: generate an image (Google Gemini image model or DALL-E 3), list everything it has generated, and get a ready-to-paste embed snippet. Generated images are written to **Cloudflare R2** and served from a permanent, CDN-cached public URL — so they can be embedded in chats, documents, or web pages and never expire.
 
 The whole server is a single edge Worker with **no cold starts, no servers to run, and no database** — R2 object metadata is the store. It runs globally on Cloudflare's network and scales to zero cost when idle.
 
 ## Features
 
-- 🎨 **Google Imagen 4** — Ultra and standard, via the Gemini API
+- 🎨 **Google Gemini image models** (Nano Banana, default `gemini-3.1-flash-image`) — via the Gemini API. Imagen 4 was shut down on 2026-08-17.
 - 🖼️ **DALL-E 3** — via the OpenAI API
 - ☁️ **Cloudflare R2** permanent storage — images never expire
 - 🔗 Public, immutable, CDN-cached URLs for embedding anywhere
@@ -35,7 +35,7 @@ The whole server is a single edge Worker with **no cold starts, no servers to ru
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `prompt` | string | — | **Required.** English recommended for best quality |
-| `engine` | enum | `google-work` | `google-work` = Imagen 4 Ultra · `google` = Imagen 4 standard · `openai` = DALL-E 3 |
+| `engine` | enum | `google-work` | `google-work` = Gemini image model on the work key · `google` = same model on the personal key · `openai` = DALL-E 3 |
 | `aspect_ratio` | enum | `1:1` | `1:1` · `16:9` · `9:16` |
 | `style` | enum | `auto` | OpenAI only — `vivid` (dramatic) · `natural` (realistic) |
 | `filename` | string | auto | Storage name without extension; auto-generated if omitted |
@@ -46,7 +46,7 @@ The whole server is a single edge Worker with **no cold starts, no servers to ru
 
 - A [Cloudflare account](https://dash.cloudflare.com)
 - The [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
-- A Google Gemini API key (for Imagen) and/or an OpenAI API key
+- A Google Gemini API key (for Gemini image models) and/or an OpenAI API key
 
 ### Deploy
 
@@ -58,8 +58,8 @@ npm install
 wrangler r2 bucket create claude-images
 
 # 3. Set the API keys you intend to use (at least one is required)
-wrangler secret put GOOGLE_API_KEY_WORK   # Imagen 4 Ultra  (engine: google-work)
-wrangler secret put GOOGLE_API_KEY        # Imagen 4 std    (engine: google)     — optional
+wrangler secret put GOOGLE_API_KEY_WORK   # Gemini image    (engine: google-work)
+wrangler secret put GOOGLE_API_KEY        # Gemini image    (engine: google)     — optional
 wrangler secret put OPENAI_API_KEY        # DALL-E 3        (engine: openai)     — optional
 wrangler secret put AUTH_TOKEN            # Bearer auth                          — optional
 
@@ -111,7 +111,7 @@ If you set `AUTH_TOKEN`, the client must send `Authorization: Bearer <token>`.
 ```
 AI client (Claude, …)
   └─ MCP over HTTP ─► Cloudflare Worker (this repo)
-                       ├─► Google Generative Language API   (Imagen 4 Ultra / standard)
+                       ├─► Google Generative Language API   (Gemini image models)     
                        ├─► OpenAI API                        (DALL-E 3)
                        └─► Cloudflare R2                      (image storage + metadata)
                               └─ served back via GET /i/<filename>
@@ -124,8 +124,9 @@ There is no separate database: image metadata (prompt, engine, aspect ratio, tim
 | Variable | Required | Description |
 |---|---|---|
 | `PUBLIC_URL` | ✅ | Worker's public URL (set in `wrangler.toml`); used to build image links |
-| `GOOGLE_API_KEY_WORK` | ✅\* | Gemini API key for Imagen 4 Ultra |
-| `GOOGLE_API_KEY` | ✅\* | Gemini API key for Imagen 4 standard |
+| `GOOGLE_API_KEY_WORK` | ✅\* | Gemini API key for engine `google-work` |
+| `GOOGLE_API_KEY` | ✅\* | Gemini API key for engine `google` |
+| `GOOGLE_IMAGE_MODEL` | ❌ | Gemini image model ID (default `gemini-3.1-flash-image`) |
 | `OPENAI_API_KEY` | ✅\* | OpenAI API key for DALL-E 3 |
 | `AUTH_TOKEN` | ❌ | Bearer token for auth (leave unset = open access) |
 
